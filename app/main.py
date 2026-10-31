@@ -18,7 +18,10 @@ from app.database import (
     connect_redis,
     disconnect_mongodb,
     disconnect_redis,
+    get_db,
 )
+from app.crud import users as users_crud
+from app.crud import inference as inference_crud
 from app.routers import health
 
 # ─── Logging ─────────────────────────────────────────────────────────────────
@@ -40,6 +43,13 @@ async def lifespan(app: FastAPI):
     logger.info("🚀  Starting AI Inference Load Management Service...")
     await connect_mongodb()
     await connect_redis()
+
+    # Bootstrap MongoDB indexes on all 4 collections
+    db = get_db()
+    await users_crud.ensure_indexes(db)
+    await inference_crud.ensure_indexes(db)
+    logger.info("📑  MongoDB indexes verified.")
+
     logger.info("🟢  All connections established. API is ready.")
 
     yield  # ← application runs here
