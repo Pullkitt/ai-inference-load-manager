@@ -22,7 +22,7 @@ from app.database import (
 )
 from app.crud import users as users_crud
 from app.crud import inference as inference_crud
-from app.routers import health
+from app.routers import health, auth
 
 # ─── Logging ─────────────────────────────────────────────────────────────────
 logging.basicConfig(
@@ -96,8 +96,10 @@ app.add_middleware(
 # Commit 1: Health check
 app.include_router(health.router)
 
-# Commits 2–8: Additional routers will be mounted here as they are implemented:
-# app.include_router(auth.router,      prefix="/api/auth",      tags=["Auth"])
+# Commit 3: Authentication
+app.include_router(auth.router)
+
+# Commits 4–8: Additional routers will be mounted here as they are implemented:
 # app.include_router(inference.router, prefix="/api/inference", tags=["Inference"])
 # app.include_router(metrics.router,   prefix="/api/metrics",   tags=["Metrics"])
 # app.include_router(logs.router,      prefix="/api/logs",      tags=["Logs"])
