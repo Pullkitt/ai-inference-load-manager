@@ -1,0 +1,87 @@
+# =============================================================================
+#  .gitignore — AI Inference Load Management Service
+# =============================================================================
+
+# ─── CRITICAL: Never commit secrets ──────────────────────────────────────────
+.env
+
+# ─── Python ──────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.eggs
+*.egg
+MANIFEST
+
+# ─── Virtual Environment ─────────────────────────────────────────────────────
+venv/
+env/
+.venv/
+ENV/
+env.bak/
+venv.bak/
+
+# ─── IDE & Editor ────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+*.swo
+*~
+.project
+.classpath
+.settings/
+
+# ─── Testing & Coverage ──────────────────────────────────────────────────────
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+nosetests.xml
+coverage.xml
+*.cover
+*.coveragerc
+test-results/
+locust_results/
+
+# ─── Docker ──────────────────────────────────────────────────────────────────
+.docker/
+
+# ─── Logs ────────────────────────────────────────────────────────────────────
+*.log
+logs/
+locust_*.csv
+locust_*.html
+
+# ─── OS ──────────────────────────────────────────────────────────────────────
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# ─── Temporary ───────────────────────────────────────────────────────────────
+tmp/
+temp/
+*.tmp
+*.bak
+

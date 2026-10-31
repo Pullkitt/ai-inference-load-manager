@@ -1,0 +1,27 @@
+# ─── Web Framework ────────────────────────────────────────────────────────────
+fastapi==0.115.12
+uvicorn[standard]==0.34.2
+python-multipart==0.0.20
+
+# ─── Async Database Drivers ───────────────────────────────────────────────────
+motor==3.7.0
+redis==5.2.1
+
+# ─── Configuration & Validation (Pydantic v2 — pre-built wheels for Python 3.13) ─
+pydantic==2.14.2
+pydantic-settings==2.9.1
+python-dotenv==1.1.0
+
+# ─── Authentication & Security ────────────────────────────────────────────────
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+bcrypt==4.3.0
+
+# ─── HTTP Client (for dashboard proxy / internal calls) ───────────────────────
+httpx==0.28.1
+
+# ─── Load Testing ─────────────────────────────────────────────────────────────
+locust==2.37.3
+
+# ─── Utilities ────────────────────────────────────────────────────────────────
+python-dateutil==2.9.0.post0

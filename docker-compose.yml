@@ -1,0 +1,104 @@
+# =============================================================================
+#  docker-compose.yml — AI Inference Load Management Service
+#  Services: api, worker, redis, mongodb
+# =============================================================================
+version: "3.9"
+
+services:
+
+  # ─── FastAPI Application ────────────────────────────────────────────────────
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ai_inference_api
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      # Override with Docker internal hostnames so services can talk to each other
+      - MONGODB_URL=mongodb://mongodb:27017
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      redis:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+    volumes:
+      # Bind-mount source for hot-reload (dev only)
+      - .:/app
+    networks:
+      - ai_inference_net
+    restart: unless-stopped
+
+  # ─── Background Inference Worker ────────────────────────────────────────────
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    container_name: ai_inference_worker
+    env_file:
+      - .env
+    environment:
+      - MONGODB_URL=mongodb://mongodb:27017
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      redis:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+    volumes:
+      - .:/app
+    networks:
+      - ai_inference_net
+    restart: unless-stopped
+
+  # ─── Redis 7 (State Hub: queues, counters, cache, circuit breaker) ──────────
+  redis:
+    image: redis:7-alpine
+    container_name: ai_inference_redis
+    ports:
+      - "6379:6379"
+    command: redis-server --save 60 1 --loglevel warning
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - ai_inference_net
+    restart: unless-stopped
+
+  # ─── MongoDB 7 (Persistent Storage: users, requests, results, audit logs) ───
+  mongodb:
+    image: mongo:7
+    container_name: ai_inference_mongodb
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - ai_inference_net
+    restart: unless-stopped
+
+# ─── Named Volumes ────────────────────────────────────────────────────────────
+volumes:
+  redis_data:
+    driver: local
+  mongodb_data:
+    driver: local
+
+# ─── Networks ────────────────────────────────────────────────────────────────
+networks:
+  ai_inference_net:
+    driver: bridge
+
