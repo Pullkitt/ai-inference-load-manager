@@ -1,0 +1,1197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Inference Load Management Service</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #f2f3f5;
+      --surface: #ffffff;
+      --ink: #1d2127;
+      --muted: #5d6672;
+      --line: #d7dae0;
+      --accent: #2a5db0;
+      --ok: #1f7a4d;
+      --ok-bg: #e3f2e9;
+      --warn: #9a6700;
+      --warn-bg: #fbf0d4;
+      --bad: #b3261e;
+      --bad-bg: #fae3e1;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #16181c;
+        --surface: #1e2126;
+        --ink: #e6e8eb;
+        --muted: #9aa3ae;
+        --line: #33383f;
+        --accent: #7aa5e8;
+        --ok: #6cc596;
+        --ok-bg: #1d3427;
+        --warn: #e0b44c;
+        --warn-bg: #3a3017;
+        --bad: #f08a82;
+        --bad-bg: #3d2220;
+      }
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg);
+      color: var(--ink);
+      font-family: 'IBM Plex Sans', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-size: 14px;
+      line-height: 1.5;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .mono {
+      font-family: 'IBM Plex Mono', Menlo, Monaco, Consolas, monospace;
+    }
+
+    .tabular {
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* ─── Header ───────────────────────────────────────────────────────────── */
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--line);
+      height: 48px;
+      padding: 0 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      position: sticky;
+      top: 0;
+      z-index: 50;
+    }
+
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .header-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--ink);
+    }
+
+    .header-status {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--ok);
+    }
+
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .header-link {
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 13px;
+      transition: color 0.1s;
+    }
+    .header-link:hover {
+      color: var(--ink);
+      text-decoration: underline;
+    }
+    .header-link:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+
+    /* ─── Main Content ─────────────────────────────────────────────────────── */
+    main {
+      flex: 1;
+      padding: 20px 24px;
+      max-width: 1180px;
+      margin: 0 auto;
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    /* ─── Panel Component ──────────────────────────────────────────────────── */
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 4px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .panel-header {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .panel-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--ink);
+      line-height: 1.4;
+    }
+
+    .panel-body {
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    /* ─── System Status (Single Bordered Grid) ──────────────────────────────── */
+    .status-grid {
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      background: var(--line);
+      gap: 1px;
+    }
+    @media (max-width: 1040px) {
+      .status-grid {
+        grid-template-columns: repeat(3, 1fr);
+      }
+    }
+    @media (max-width: 640px) {
+      .status-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+    @media (max-width: 440px) {
+      .status-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .status-cell {
+      background: var(--surface);
+      padding: 14px 16px;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-start;
+      min-height: 98px;
+    }
+
+    .metric-label {
+      font-size: 13px;
+      color: var(--muted);
+      font-weight: 400;
+      margin-bottom: 4px;
+      line-height: 1.3;
+    }
+
+    .metric-header-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-bottom: 4px;
+    }
+
+    .metric-value {
+      font-size: 22px;
+      font-weight: 600;
+      color: var(--ink);
+      line-height: 1.2;
+    }
+
+    .metric-sub {
+      font-size: 13px;
+      font-weight: 400;
+      color: var(--muted);
+      margin-left: 2px;
+    }
+
+    .metric-divider {
+      font-size: 14px;
+      font-weight: 400;
+      color: var(--muted);
+      margin: 0 4px;
+    }
+
+    .metric-note {
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.3;
+    }
+
+    .metric-status-counts {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px 8px;
+      font-size: 13px;
+      color: var(--ink);
+      margin-top: 4px;
+    }
+
+    .progress-bar-bg {
+      height: 4px;
+      background: var(--line);
+      border-radius: 2px;
+      overflow: hidden;
+      margin-top: 8px;
+    }
+
+    .progress-bar-fill {
+      height: 100%;
+      background: var(--accent);
+      width: 0%;
+      border-radius: 2px;
+    }
+
+    /* ─── Controls Grid (Side-by-Side) ─────────────────────────────────────── */
+    .controls-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+    @media (max-width: 820px) {
+      .controls-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .control-section {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .section-border-top {
+      padding-top: 12px;
+      border-top: 1px solid var(--line);
+    }
+
+    .section-desc {
+      font-size: 13px;
+      color: var(--muted);
+      line-height: 1.4;
+    }
+
+    .btn-group {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    /* ─── Utilitarian Buttons ──────────────────────────────────────────────── */
+    button {
+      border: 1px solid var(--line);
+      border-radius: 3px;
+      padding: 6px 12px;
+      font-family: 'IBM Plex Sans', system-ui, -apple-system, sans-serif;
+      font-size: 13px;
+      font-weight: 500;
+      line-height: 1.4;
+      cursor: pointer;
+      background: var(--surface);
+      color: var(--ink);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      white-space: nowrap;
+    }
+    button:hover:not(:disabled) {
+      border-color: var(--muted);
+    }
+    button:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 1px;
+    }
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .btn-outline-danger {
+      color: var(--bad);
+      border-color: var(--bad);
+      background: transparent;
+    }
+    .btn-outline-danger:hover:not(:disabled) {
+      border-color: var(--bad);
+      background: var(--bad-bg);
+    }
+
+    .btn-fault-active {
+      color: var(--ok);
+      border-color: var(--ok);
+      background: var(--ok-bg);
+    }
+    .btn-fault-active:hover:not(:disabled) {
+      border-color: var(--ok);
+    }
+
+    .sim-status-box {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 3px;
+      padding: 8px 12px;
+      font-size: 13px;
+      color: var(--ink);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      min-height: 38px;
+      margin-top: 4px;
+    }
+
+    /* ─── Idempotency Comparison Output ────────────────────────────────────── */
+    .idemp-container {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-top: 8px;
+    }
+    @media (max-width: 480px) {
+      .idemp-container {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .idemp-cell {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 3px;
+      padding: 10px 12px;
+      font-size: 13px;
+    }
+
+    .idemp-cell-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+
+    .idemp-line {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 4px;
+      font-size: 12px;
+    }
+    .idemp-line span:first-child {
+      color: var(--muted);
+    }
+    .idemp-line span:last-child {
+      color: var(--ink);
+      font-weight: 500;
+    }
+
+    /* ─── Table Component ──────────────────────────────────────────────────── */
+    .table-container {
+      overflow-x: auto;
+      max-height: 420px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+      text-align: left;
+    }
+
+    th {
+      background: var(--surface);
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 500;
+      letter-spacing: normal;
+      text-transform: none;
+      padding: 8px 16px;
+      border-bottom: 1px solid var(--line);
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+
+    td {
+      padding: 8px 16px;
+      border-bottom: 1px solid var(--line);
+      color: var(--ink);
+      font-size: 13px;
+    }
+
+    tr:last-child td {
+      border-bottom: none;
+    }
+
+    td:last-child {
+      text-align: right;
+    }
+
+    /* ─── Status Tags / Pills ──────────────────────────────────────────────── */
+    .tag {
+      display: inline-block;
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-size: 12px;
+      font-weight: 500;
+      line-height: 1.3;
+    }
+    .tag-ok {
+      color: var(--ok);
+      background: var(--ok-bg);
+    }
+    .tag-warn {
+      color: var(--warn);
+      background: var(--warn-bg);
+    }
+    .tag-bad {
+      color: var(--bad);
+      background: var(--bad-bg);
+    }
+    .tag-neutral {
+      color: var(--muted);
+      background: var(--bg);
+      border: 1px solid var(--line);
+    }
+
+    /* ─── Reduced Motion Support ───────────────────────────────────────────── */
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ─── Header ──────────────────────────────────────────────────────────── -->
+  <header>
+    <div class="header-left">
+      <span class="header-title">Inference load management</span>
+      <span class="header-status">Online</span>
+    </div>
+    <div class="header-right">
+      <a href="/docs" target="_blank" class="header-link">API docs</a>
+      <a href="/health" target="_blank" class="header-link">Health</a>
+    </div>
+  </header>
+
+  <!-- ─── Main Content ────────────────────────────────────────────────────── -->
+  <main>
+
+    <!-- ─── System Status (Bordered Single Panel) ───────────────────────────── -->
+    <section class="panel">
+      <div class="panel-header">
+        <h2 class="panel-title">System status</h2>
+      </div>
+      <div class="status-grid">
+
+        <!-- 1. Fast model slots in use -->
+        <div class="status-cell">
+          <div class="metric-label">Fast model slots in use</div>
+          <div class="metric-value tabular" id="val-concurrency">
+            0 <span class="metric-sub">of 5</span>
+          </div>
+          <div class="progress-bar-bg">
+            <div class="progress-bar-fill" id="concurrency-progress-bar"></div>
+          </div>
+          <!-- Slot elements retained for script compatibility -->
+          <div id="concurrency-slots" style="display: none;">
+            <span id="slot-1"></span><span id="slot-2"></span><span id="slot-3"></span><span id="slot-4"></span><span id="slot-5"></span>
+          </div>
+        </div>
+
+        <!-- 2. Queue depth -->
+        <div class="status-cell">
+          <div class="metric-header-row">
+            <span class="metric-label">Queue depth</span>
+            <span class="metric-note" id="queue-status-tag">50 max</span>
+          </div>
+          <div class="metric-value tabular" id="val-queue">
+            0 <span class="metric-sub">of 50</span>
+          </div>
+          <div class="progress-bar-bg">
+            <div class="progress-bar-fill" id="queue-progress-bar"></div>
+          </div>
+        </div>
+
+        <!-- 3. Circuit breaker -->
+        <div class="status-cell">
+          <div class="metric-header-row">
+            <span class="metric-label">Circuit breaker</span>
+            <span class="metric-note tabular" id="cb-trips">0 trips</span>
+          </div>
+          <div style="margin-top: 4px;">
+            <span id="cb-badge" class="tag tag-ok">Closed</span>
+          </div>
+          <div class="metric-note" id="cb-details" style="margin-top: 4px;">
+            0 trips. Opens after 5 failures in 10 s
+          </div>
+        </div>
+
+        <!-- 4. Requests (N total) -->
+        <div class="status-cell">
+          <div class="metric-header-row">
+            <span class="metric-label">Requests</span>
+            <span class="metric-note tabular" id="val-total-reqs">0 total</span>
+          </div>
+          <div class="metric-status-counts mono tabular">
+            <span id="rps-200">200: 0</span>
+            <span id="rps-202">202: 0</span>
+            <span id="rps-429">429: 0</span>
+            <span id="rps-503">503: 0</span>
+          </div>
+          <div class="metric-note" style="margin-top: 4px;">Status breakdown</div>
+        </div>
+
+        <!-- 5. Latency p50 / p95 -->
+        <div class="status-cell">
+          <div class="metric-label">Latency p50 / p95</div>
+          <div class="metric-value tabular">
+            <span id="val-p50">0 ms</span>
+            <span class="metric-divider">/</span>
+            <span id="val-p95">0 ms</span>
+          </div>
+          <div class="metric-note" style="margin-top: 4px;">Target under 250 ms</div>
+        </div>
+
+        <!-- 6. Duplicate requests served from cache -->
+        <div class="status-cell">
+          <div class="metric-label">Duplicate requests served from cache</div>
+          <div class="metric-value tabular" id="val-cache-hits">0</div>
+          <div class="metric-note" style="margin-top: 4px;">Sub-10 ms lookup</div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ─── Controls Grid (Fault Testing & Load Generator) ─────────────────── -->
+    <section class="controls-grid">
+
+      <!-- Panel 1: Fault Testing -->
+      <div class="panel">
+        <div class="panel-header">
+          <h2 class="panel-title">Fault testing</h2>
+        </div>
+        <div class="panel-body">
+          <div class="control-section">
+            <p class="section-desc">Simulate fast model degradation to test circuit breaker tripping and fallback routing.</p>
+            <div class="btn-group">
+              <button id="btn-toggle-fault" class="btn-outline-danger" onclick="toggleFaultInjection()">
+                Inject fast model faults
+              </button>
+              <button onclick="resetCircuitBreaker()">
+                Reset circuit breaker
+              </button>
+            </div>
+          </div>
+
+          <div class="control-section section-border-top">
+            <p class="section-desc">Test idempotency caching by sending identical duplicate requests.</p>
+            <div>
+              <button id="btn-idemp-demo" onclick="runIdempotencyDemo()">
+                Run duplicate request test
+              </button>
+            </div>
+
+            <div id="idemp-result" class="idemp-container" style="display: none;">
+              <div class="idemp-cell">
+                <div class="idemp-cell-header">
+                  <span>Request 1 (Initial)</span>
+                  <span class="tag tag-neutral">Compute</span>
+                </div>
+                <div class="idemp-line"><span>Status:</span><span id="idemp-r1-status" class="mono">200 OK</span></div>
+                <div class="idemp-line"><span>Handled by:</span><span id="idemp-r1-model">Fast model</span></div>
+                <div class="idemp-line"><span>Latency:</span><span id="idemp-r1-lat" class="mono tabular">150 ms</span></div>
+                <div class="idemp-line"><span>Cached:</span><span id="idemp-r1-cached" class="mono">false</span></div>
+              </div>
+              <div class="idemp-cell">
+                <div class="idemp-cell-header">
+                  <span>Request 2 (Duplicate)</span>
+                  <span class="tag tag-ok">Cache hit</span>
+                </div>
+                <div class="idemp-line"><span>Status:</span><span id="idemp-r2-status" class="mono">200 OK</span></div>
+                <div class="idemp-line"><span>Handled by:</span><span id="idemp-r2-model">Fast model</span></div>
+                <div class="idemp-line"><span>Latency:</span><span id="idemp-r2-lat" class="mono tabular">3 ms</span></div>
+                <div class="idemp-line"><span>Cached:</span><span id="idemp-r2-cached" class="mono">true</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Panel 2: Load Generator -->
+      <div class="panel">
+        <div class="panel-header">
+          <h2 class="panel-title">Load generator</h2>
+        </div>
+        <div class="panel-body">
+          <p class="section-desc">Generate concurrent requests across IoT, mobile media, geospatial, and NLP schemas.</p>
+          <div class="btn-group">
+            <button onclick="simulateTraffic(10, 0.5)" id="btn-sim-10">
+              10 requests (50 / 50)
+            </button>
+            <button onclick="simulateTraffic(100, 0.7)" id="btn-sim-100">
+              100 requests (70 / 30)
+            </button>
+            <button onclick="simulateTraffic(500, 0.8)" id="btn-sim-500">
+              500 requests (80 / 20)
+            </button>
+            <button onclick="resetMetricsTelemetry()">
+              Clear metrics
+            </button>
+          </div>
+
+          <div class="sim-status-box mono tabular">
+            <span id="sim-status-text">Ready. Pick a load size.</span>
+            <span id="sim-status-counter" style="color: var(--accent); font-weight: 500;"></span>
+          </div>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- ─── Recent Requests Table ─────────────────────────────────────────── -->
+    <section class="panel">
+      <div class="panel-header">
+        <h2 class="panel-title">Recent requests</h2>
+        <button onclick="refreshHistoryTable()" style="padding: 4px 10px; font-size: 12px;">
+          Refresh
+        </button>
+      </div>
+
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>Time</th>
+              <th>Task ID</th>
+              <th>Domain</th>
+              <th>Preference</th>
+              <th>Result</th>
+              <th>Handled by</th>
+              <th>Reason</th>
+              <th style="text-align: right;">Latency</th>
+            </tr>
+          </thead>
+          <tbody id="logs-tbody">
+            <tr>
+              <td colspan="8" style="text-align: center; color: var(--muted); padding: 24px;">
+                Loading requests...
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ─── JavaScript Engine ──────────────────────────────────────────────── -->
+  <script>
+    let authToken = localStorage.getItem("jwt_token") || "";
+    let faultActive = false;
+    let isSimulating = false;
+
+    // ── Copy Mappings ────────────────────────────────────────────────────────
+    function mapRoutingReason(reason) {
+      if (!reason) return "--";
+      const map = {
+        "concurrency_limit_reached": "Fast model slots full",
+        "circuit_open": "Circuit breaker open",
+        "circuit_breaker_open": "Circuit breaker open",
+        "queue_full": "Queue full",
+        "rate_limited": "Rate limit exceeded",
+        "latency_preference_flexible": "Flexible preference",
+        "fast_path": "Fast path"
+      };
+      return map[reason] || reason;
+    }
+
+    function mapModel(model) {
+      if (!model) return "--";
+      if (model === "fast_model") return "Fast model";
+      if (model === "slow_model" || model === "slow_model (queued)") return "Slow model";
+      return model;
+    }
+
+    function mapDomain(dom) {
+      if (!dom) return "IoT";
+      const map = {
+        "mobile_media": "Mobile media",
+        "iot": "IoT",
+        "geospatial": "Geospatial",
+        "ai_nlp": "NLP",
+        "nlp": "NLP"
+      };
+      return map[dom] || dom;
+    }
+
+    function mapPreference(pref) {
+      if (!pref) return "--";
+      if (pref === "fast") return "Fast";
+      if (pref === "flexible") return "Flexible";
+      return pref;
+    }
+
+    function formatResultTag(statusCode, status) {
+      if (statusCode === 200 || status === "completed") {
+        return '<span class="tag tag-ok mono tabular">200 OK</span>';
+      }
+      if (statusCode === 202 || status === "queued") {
+        return '<span class="tag tag-warn mono tabular">202 Queued</span>';
+      }
+      if (statusCode === 429) {
+        return '<span class="tag tag-bad mono tabular">429 Limited</span>';
+      }
+      if (statusCode === 503) {
+        return '<span class="tag tag-bad mono tabular">503 Overloaded</span>';
+      }
+      return `<span class="tag tag-bad mono tabular">${statusCode || 500} Failed</span>`;
+    }
+
+    // ── 1. Authentication ────────────────────────────────────────────────────
+    async function ensureAuth() {
+      if (authToken) return authToken;
+      try {
+        const loginRes = await fetch("/api/auth/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ username: "dashboard_admin", password: "AdminPassword123!" })
+        });
+        if (loginRes.ok) {
+          const data = await loginRes.json();
+          authToken = data.access_token;
+          localStorage.setItem("jwt_token", authToken);
+          return authToken;
+        }
+
+        const regRes = await fetch("/api/auth/register", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            username: "dashboard_admin",
+            password: "AdminPassword123!",
+            role: "admin"
+          })
+        });
+        if (regRes.ok) {
+          const data = await regRes.json();
+          authToken = data.access_token;
+          localStorage.setItem("jwt_token", authToken);
+          return authToken;
+        }
+      } catch (e) {
+        console.warn("Auth initialization error:", e);
+      }
+      return "";
+    }
+
+    // ── 2. Telemetry Poller (GET /api/metrics/system-load) ───────────────────
+    async function pollTelemetry() {
+      try {
+        const res = await fetch("/api/metrics/system-load");
+        if (!res.ok) return;
+        const m = await res.json();
+
+        // Circuit Breaker
+        const cbBadge = document.getElementById("cb-badge");
+        const cbDetails = document.getElementById("cb-details");
+        const cbTrips = document.getElementById("cb-trips");
+        const trips = m.circuit_breaker_trip_count || 0;
+        const tripWord = trips === 1 ? "trip" : "trips";
+        cbTrips.innerText = `${trips} ${tripWord}`;
+
+        const state = m.circuit_breaker_state || "CLOSED";
+        if (state === "CLOSED") {
+          cbBadge.innerText = "Closed";
+          cbBadge.className = "tag tag-ok";
+        } else if (state === "OPEN") {
+          cbBadge.innerText = "Open";
+          cbBadge.className = "tag tag-bad";
+        } else {
+          cbBadge.innerText = "Half-open";
+          cbBadge.className = "tag tag-warn";
+        }
+
+        faultActive = Boolean(m.fault_injection_active);
+        const faultBtn = document.getElementById("btn-toggle-fault");
+        if (faultActive) {
+          faultBtn.innerText = "Clear fault injection";
+          faultBtn.className = "btn-fault-active";
+          cbDetails.innerText = "Fault injection active (simulating 500s)";
+        } else {
+          faultBtn.innerText = "Inject fast model faults";
+          faultBtn.className = "btn-outline-danger";
+          if (state === "CLOSED") {
+            cbDetails.innerText = `${trips} ${tripWord}. Opens after 5 failures in 10 s`;
+          } else if (state === "OPEN") {
+            cbDetails.innerText = "Open: Diverting fast traffic to queue";
+          } else {
+            cbDetails.innerText = "Half-open: Probe in progress";
+          }
+        }
+
+        // Fast model slots in use
+        document.getElementById("val-concurrency").innerHTML = `${m.active_fast_concurrency} <span class="metric-sub">of ${m.fast_model_max_concurrency}</span>`;
+        const cPct = Math.min(100, Math.round((m.active_fast_concurrency / m.fast_model_max_concurrency) * 100));
+        const cBar = document.getElementById("concurrency-progress-bar");
+        if (cBar) cBar.style.width = cPct + "%";
+
+        for (let i = 1; i <= 5; i++) {
+          const slot = document.getElementById(`slot-${i}`);
+          if (slot) {
+            slot.className = i <= m.active_fast_concurrency ? "active" : "";
+          }
+        }
+
+        // Queue Depth
+        document.getElementById("val-queue").innerHTML = `${m.redis_queue_depth} <span class="metric-sub">of ${m.max_queue_depth}</span>`;
+        const qPct = Math.min(100, Math.round((m.redis_queue_depth / m.max_queue_depth) * 100));
+        const qBar = document.getElementById("queue-progress-bar");
+        if (qBar) {
+          qBar.style.width = qPct + "%";
+          qBar.style.backgroundColor = qPct >= 90 ? "var(--bad)" : (qPct >= 50 ? "var(--warn)" : "var(--accent)");
+        }
+
+        const qTag = document.getElementById("queue-status-tag");
+        if (qTag) {
+          if (m.redis_queue_depth >= m.max_queue_depth) {
+            qTag.innerText = "Queue full (503 backpressure)";
+            qTag.style.color = "var(--bad)";
+          } else {
+            qTag.innerText = `${m.max_queue_depth} max`;
+            qTag.style.color = "var(--muted)";
+          }
+        }
+
+        // Latencies
+        document.getElementById("val-p50").innerText = `${m.latency.p50_ms} ms`;
+        document.getElementById("val-p95").innerText = `${m.latency.p95_ms} ms`;
+
+        // Cache Hits
+        document.getElementById("val-cache-hits").innerText = m.idempotency_cache_hits;
+
+        // Status Counts
+        document.getElementById("val-total-reqs").innerText = `${m.rps.total} total`;
+        document.getElementById("rps-200").innerText = `200: ${m.rps.status_200}`;
+        document.getElementById("rps-202").innerText = `202: ${m.rps.status_202}`;
+        document.getElementById("rps-429").innerText = `429: ${m.rps.status_429}`;
+        document.getElementById("rps-503").innerText = `503: ${m.rps.status_503}`;
+
+      } catch (err) {
+        console.warn("Telemetry polling error:", err);
+      }
+    }
+
+    // ── 3. Toggle Fault Injection ────────────────────────────────────────────
+    async function toggleFaultInjection() {
+      const token = await ensureAuth();
+      const targetState = !faultActive;
+      try {
+        const res = await fetch(`/admin/fail-fast-model?enable=${targetState}`, {
+          method: "POST",
+          headers: { "Authorization": `Bearer ${token}` }
+        });
+        if (res.ok) {
+          await pollTelemetry();
+        } else {
+          alert("Admin authorization required to toggle fault injection.");
+        }
+      } catch (e) {
+        alert("Error toggling fault injection: " + e.message);
+      }
+    }
+
+    // ── 4. Reset Circuit Breaker ─────────────────────────────────────────────
+    async function resetCircuitBreaker() {
+      const token = await ensureAuth();
+      try {
+        await fetch("/admin/reset-circuit-breaker", {
+          method: "POST",
+          headers: { "Authorization": `Bearer ${token}` }
+        });
+        await pollTelemetry();
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    // ── 5. Reset Telemetry ───────────────────────────────────────────────────
+    async function resetMetricsTelemetry() {
+      try {
+        await fetch("/api/metrics/reset", { method: "POST" });
+        await pollTelemetry();
+        refreshHistoryTable();
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    // ── 6. Idempotency Live Demo ─────────────────────────────────────────────
+    async function runIdempotencyDemo() {
+      const token = await ensureAuth();
+      const btn = document.getElementById("btn-idemp-demo");
+      btn.disabled = true;
+      btn.innerText = "Executing verification...";
+
+      try {
+        await fetch("/admin/reset-rate-limit", {
+          method: "POST",
+          headers: { "Authorization": `Bearer ${token}` }
+        });
+      } catch (e) {
+        // continue
+      }
+
+      const demoPayload = {
+        latency_preference: "fast",
+        payload: {
+          domain: "iot",
+          device_id: "idemp_sensor_demo",
+          sensor_type: "temperature",
+          reading_array: [25.4, 25.6, 25.5],
+          timestamp: new Date().toISOString()
+        }
+      };
+
+      const requestHeaders = {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${token}`,
+        "X-Bypass-Rate-Limit": "true"
+      };
+
+      try {
+        // Request 1: Fresh Compute
+        const t1Start = performance.now();
+        const r1 = await fetch("/api/inference/predict", {
+          method: "POST",
+          headers: requestHeaders,
+          body: JSON.stringify(demoPayload)
+        });
+        const d1 = await r1.json();
+        const t1Latency = Math.round(performance.now() - t1Start);
+
+        // Request 2: Duplicate Payload (Instant Cache Hit)
+        const t2Start = performance.now();
+        const r2 = await fetch("/api/inference/predict", {
+          method: "POST",
+          headers: requestHeaders,
+          body: JSON.stringify(demoPayload)
+        });
+        const d2 = await r2.json();
+        const t2Latency = Math.round(performance.now() - t2Start);
+
+        const formatStatus = (s) => s === 200 ? "200 OK" : (s === 202 ? "202 Queued" : `${s} Error`);
+
+        document.getElementById("idemp-result").style.display = "grid";
+        document.getElementById("idemp-r1-status").innerText = formatStatus(r1.status);
+        document.getElementById("idemp-r1-model").innerText = mapModel(d1.model_used || "fast_model");
+        document.getElementById("idemp-r1-lat").innerText = `${d1.processing_time_ms || t1Latency} ms`;
+        document.getElementById("idemp-r1-cached").innerText = String(Boolean(d1.cached));
+
+        document.getElementById("idemp-r2-status").innerText = formatStatus(r2.status);
+        document.getElementById("idemp-r2-model").innerText = mapModel(d2.model_used || "fast_model");
+        document.getElementById("idemp-r2-lat").innerText = `${t2Latency} ms`;
+        document.getElementById("idemp-r2-cached").innerText = String(Boolean(d2.cached));
+
+        await pollTelemetry();
+        refreshHistoryTable();
+      } catch (err) {
+        alert("Idempotency demo error: " + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.innerText = "Run duplicate request test";
+      }
+    }
+
+    // ── 7. Traffic Simulator ─────────────────────────────────────────────────
+    async function simulateTraffic(count, fastRatio) {
+      if (isSimulating) return;
+      isSimulating = true;
+      const token = await ensureAuth();
+
+      const statusText = document.getElementById("sim-status-text");
+      const counter = document.getElementById("sim-status-counter");
+      statusText.innerText = `Dispatching ${count} requests (${Math.round(fastRatio * 100)}% fast)...`;
+
+      const domains = [
+        {
+          domain: "iot",
+          device_id: "edge_sensor_" + Math.floor(Math.random() * 100),
+          sensor_type: "temperature",
+          reading_array: [21.5, 22.0, 21.8],
+          timestamp: new Date().toISOString()
+        },
+        {
+          domain: "mobile_media",
+          client_id: "mobile_client_" + Math.floor(Math.random() * 100),
+          image_dimension: "1280x720",
+          feature_vector: [0.2, 0.7, 0.4],
+          mode: "object_detection"
+        },
+        {
+          domain: "geospatial",
+          unit_id: "gps_unit_" + Math.floor(Math.random() * 100),
+          latitude: 30.3165 + (Math.random() - 0.5) * 0.1,
+          longitude: 78.0322 + (Math.random() - 0.5) * 0.1,
+          speed: 45.0,
+          altitude: 410.0
+        },
+        {
+          domain: "ai_nlp",
+          prompt_tokens: 120,
+          temperature: 0.7,
+          input_text: "Adaptive inference simulation batch load test sample."
+        }
+      ];
+
+      let completed = 0;
+      const batchSize = Math.min(25, count);
+
+      async function sendOne() {
+        const isFast = Math.random() < fastRatio;
+        const dom = domains[Math.floor(Math.random() * domains.length)];
+        const body = {
+          latency_preference: isFast ? "fast" : "flexible",
+          payload: dom
+        };
+        try {
+          await fetch("/api/inference/predict", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${token}`
+            },
+            body: JSON.stringify(body)
+          });
+        } catch (e) {
+          // ignore transient network errors
+        }
+        completed++;
+        counter.innerText = `${completed} of ${count}`;
+      }
+
+      for (let i = 0; i < count; i += batchSize) {
+        const currentBatch = Math.min(batchSize, count - i);
+        const promises = [];
+        for (let j = 0; j < currentBatch; j++) {
+          promises.push(sendOne());
+        }
+        await Promise.all(promises);
+        await pollTelemetry();
+      }
+
+      statusText.innerText = `Completed ${count} requests. Telemetry updated.`;
+      counter.innerText = "";
+      isSimulating = false;
+      refreshHistoryTable();
+    }
+
+    // ── 8. Request History Stream Table ──────────────────────────────────────
+    async function refreshHistoryTable() {
+      const token = await ensureAuth();
+      try {
+        const res = await fetch("/api/logs/history?limit=15", {
+          headers: { "Authorization": `Bearer ${token}` }
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        const tbody = document.getElementById("logs-tbody");
+
+        if (!data.requests || data.requests.length === 0) {
+          tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; color: var(--muted); padding: 24px;">No requests recorded. Use the load generator above.</td></tr>`;
+          return;
+        }
+
+        const resultsMap = {};
+        if (data.results) {
+          data.results.forEach(r => { resultsMap[r.request_id] = r; });
+        }
+
+        tbody.innerHTML = data.requests.map(req => {
+          const result = resultsMap[req.request_id];
+          const timeStr = req.submitted_at
+            ? new Date(req.submitted_at).toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })
+            : "--";
+          const status = req.status || "queued";
+
+          let statusCode = 202;
+          if (status === "completed") {
+            statusCode = 200;
+          } else if (status === "failed") {
+            statusCode = 500;
+          }
+
+          let rawModel = "slow_model";
+          if (status === "completed") {
+            rawModel = result ? result.model_used : (req.model_used || "fast_model");
+          } else if (status === "queued") {
+            rawModel = "slow_model (queued)";
+          }
+
+          let rawReason = req.routing_reason || (result ? result.routing_reason : "");
+          if (!rawReason) {
+            if (req.latency_preference === "flexible") {
+              rawReason = "latency_preference_flexible";
+            } else if (status === "queued") {
+              rawReason = "concurrency_limit_reached";
+            } else {
+              rawReason = "fast_path";
+            }
+          }
+
+          const latencyText = result
+            ? `${result.processing_time_ms} ms`
+            : (status === "queued" ? "Enqueued" : "Processing");
+
+          return `
+            <tr>
+              <td class="tabular">${timeStr}</td>
+              <td class="mono" style="color: var(--muted);">${req.request_id ? req.request_id.slice(0, 8) : '--'}</td>
+              <td>${mapDomain(req.domain || 'iot')}</td>
+              <td>${mapPreference(req.latency_preference)}</td>
+              <td>${formatResultTag(statusCode, status)}</td>
+              <td>${mapModel(rawModel)}</td>
+              <td style="color: var(--muted);">${mapRoutingReason(rawReason)}</td>
+              <td class="mono tabular" style="font-weight: 500; text-align: right;">${latencyText}</td>
+            </tr>
+          `;
+        }).join("");
+
+      } catch (err) {
+        console.warn("History fetch error:", err);
+      }
+    }
+
+    // ── 9. Startup ───────────────────────────────────────────────────────────
+    window.addEventListener("DOMContentLoaded", async () => {
+      await ensureAuth();
+      await pollTelemetry();
+      await refreshHistoryTable();
+      setInterval(pollTelemetry, 1500);
+      setInterval(refreshHistoryTable, 5000);
+    });
+  </script>
+</body>
+</html>

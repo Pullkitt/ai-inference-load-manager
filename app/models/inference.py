@@ -135,6 +135,14 @@ class InferenceRequestDocument(BaseModel):
         default=RequestStatus.QUEUED.value,
         description="queued | processing | completed | failed",
     )
+    model_used: Optional[str] = Field(
+        default=None,
+        description="fast_model | slow_model",
+    )
+    routing_reason: Optional[str] = Field(
+        default=None,
+        description="Reason for the routing decision",
+    )
 
     model_config = {"use_enum_values": True}
 

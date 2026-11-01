@@ -8,10 +8,13 @@ Configures:
 """
 
 import logging
+import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
 from app.database import (
     connect_mongodb,
@@ -106,4 +109,29 @@ app.include_router(admin.router)
 # Commit 7: Observability and historical logs
 app.include_router(metrics.router)
 app.include_router(logs.router)
+
+# =============================================================================
+# Commit 8: Live Monitoring Dashboard (Single-Page App served at /)
+# =============================================================================
+STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
+if os.path.exists(STATIC_DIR):
+    app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+
+    @app.get(
+        "/",
+        summary="Live Monitoring Dashboard",
+        include_in_schema=False,
+    )
+    async def dashboard():
+        """Serve the single-page monitoring console and traffic simulator."""
+        return FileResponse(os.path.join(STATIC_DIR, "index.html"))
+
+    @app.get(
+        "/dashboard",
+        summary="Live Monitoring Dashboard Alias",
+        include_in_schema=False,
+    )
+    async def dashboard_alias():
+        """Alias for /."""
+        return FileResponse(os.path.join(STATIC_DIR, "index.html"))
 

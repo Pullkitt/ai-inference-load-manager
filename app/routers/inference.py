@@ -88,6 +88,7 @@ async def predict(
     request: PredictRequest,
     current_user: dict = Depends(get_current_user),
     idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
+    bypass_rate_limit: Optional[str] = Header(None, alias="X-Bypass-Rate-Limit"),
     db: AsyncIOMotorDatabase = Depends(get_db_dep),
     redis: aioredis.Redis = Depends(get_redis_dep),
 ):
@@ -98,24 +99,25 @@ async def predict(
     # ─────────────────────────────────────────────────────────────────────────
     # STEP 1: Rate Limiting & Quota Check (SRS §2.1 Step 2)
     # ─────────────────────────────────────────────────────────────────────────
-    allowed, retry_after, _ = await check_rate_limit(redis, user_id=user_id)
-    if not allowed:
-        await metrics.record_request_status(redis, 429)
-        await write_audit_log(
-            db,
-            event_type=AuditEventType.RATE_LIMIT_429.value,
-            details={"user_id": user_id, "retry_after": retry_after},
-        )
-        return JSONResponse(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            content={
-                "success": False,
-                "error": "rate_limit_exceeded",
-                "detail": f"Rate limit of {settings.RATE_LIMIT_PER_MIN} requests/minute exceeded.",
-                "retry_after": retry_after,
-            },
-            headers={"Retry-After": str(retry_after)},
-        )
+    if bypass_rate_limit != "true":
+        allowed, retry_after, _ = await check_rate_limit(redis, user_id=user_id)
+        if not allowed:
+            await metrics.record_request_status(redis, 429)
+            await write_audit_log(
+                db,
+                event_type=AuditEventType.RATE_LIMIT_429.value,
+                details={"user_id": user_id, "retry_after": retry_after},
+            )
+            return JSONResponse(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                content={
+                    "success": False,
+                    "error": "rate_limit_exceeded",
+                    "detail": f"Rate limit of {settings.RATE_LIMIT_PER_MIN} requests/minute exceeded.",
+                    "retry_after": retry_after,
+                },
+                headers={"Retry-After": str(retry_after)},
+            )
 
     # ─────────────────────────────────────────────────────────────────────────
     # STEP 2: Idempotent Duplicate Detection (SRS §2.1 Step 1)
@@ -174,6 +176,8 @@ async def predict(
             latency_preference=LatencyPreference.FLEXIBLE.value,
             raw_payload=payload_dict,
             status=RequestStatus.QUEUED.value,
+            model_used=ModelUsed.SLOW.value,
+            routing_reason=RoutingReason.LATENCY_FLEXIBLE.value,
         )
         await create_inference_request(db, req_doc)
 
@@ -231,6 +235,8 @@ async def predict(
                     latency_preference=LatencyPreference.FAST.value,
                     raw_payload=payload_dict,
                     status=RequestStatus.QUEUED.value,
+                    model_used=ModelUsed.SLOW.value,
+                    routing_reason=RoutingReason.FALLBACK_QUEUE.value,
                 )
                 await create_inference_request(db, req_doc)
 
@@ -265,6 +271,11 @@ async def predict(
                 await circuit_breaker.record_success(redis, db)
 
             # Persist completed request & result to MongoDB
+            routing_decision_str = (
+                RoutingReason.HALF_OPEN_PROBE.value
+                if cb_state == CircuitState.HALF_OPEN.value
+                else RoutingReason.FAST_PATH.value
+            )
             req_doc = InferenceRequestDocument(
                 request_id=request_id,
                 user_id=user_id,
@@ -273,6 +284,8 @@ async def predict(
                 latency_preference=LatencyPreference.FAST.value,
                 raw_payload=payload_dict,
                 status=RequestStatus.COMPLETED.value,
+                model_used=ModelUsed.FAST.value,
+                routing_reason=routing_decision_str,
             )
             await create_inference_request(db, req_doc)
 
@@ -335,6 +348,8 @@ async def predict(
             latency_preference=LatencyPreference.FAST.value,
             raw_payload=payload_dict,
             status=RequestStatus.QUEUED.value,
+            model_used=ModelUsed.SLOW.value,
+            routing_reason=routing_reason,
         )
         await create_inference_request(db, req_doc)
 

@@ -22,6 +22,7 @@ import redis.asyncio as aioredis
 from app.core.dependencies import get_db_dep, get_redis_dep, require_admin
 from app.models.responses import FaultInjectionResponse, SuccessResponse
 from app.services import circuit_breaker
+from app.services.rate_limiter import reset_rate_limit
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/admin", tags=["Admin"])
@@ -84,5 +85,25 @@ async def reset_circuit(
     return SuccessResponse(
         success=True,
         message="Circuit Breaker has been reset to CLOSED and fault injection disabled.",
+    )
+
+
+@router.post(
+    "/reset-rate-limit",
+    response_model=SuccessResponse,
+    summary="Reset User Rate Limit Window",
+    description="Admin utility to immediately clear rate-limiting sliding window for testing.",
+)
+async def reset_user_rate_limit(
+    user_id: Optional[str] = Query(None, description="Target user UUID, or self if omitted"),
+    current_admin: dict = Depends(require_admin),
+    redis: aioredis.Redis = Depends(get_redis_dep),
+):
+    target = user_id or current_admin["user_id"]
+    await reset_rate_limit(redis, target)
+    logger.info("Admin %s reset rate limit window for %s", current_admin.get("username"), target)
+    return SuccessResponse(
+        success=True,
+        message=f"Rate limit sliding window cleared for user {target}.",
     )
 
