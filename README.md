@@ -230,7 +230,6 @@ python worker/worker.py
 
 The dashboard at `/dashboard` is designed as a utilitarian cloud ops console (inspired by Datadog and Cloudflare):
 
-- **Zero AI Clichés:** No emojis, gradients, glowing drop-shadows, or hover animations.
 - **Design Tokens:** Strict CSS variable system supporting both light mode and dark mode via `@media (prefers-color-scheme: dark)`.
 - **Typography:** Uses **IBM Plex Sans** for all UI text and labels, and **IBM Plex Mono** exclusively for task IDs, status codes, and latencies with `font-variant-numeric: tabular-nums`.
 - **System Status Strip:** A single bordered grid displaying:
