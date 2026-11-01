@@ -63,6 +63,7 @@ class Settings(BaseSettings):
     REDIS_CB_STATE_KEY: str = "circuit_breaker_state"
     REDIS_CB_FAILURES_KEY: str = "circuit_breaker_failures"
     REDIS_CB_OPEN_SINCE_KEY: str = "circuit_breaker_open_since"
+    REDIS_CB_TRIP_COUNT_KEY: str = "circuit_breaker_trip_count"
     REDIS_FAULT_INJECT_KEY: str = "fault_inject_active"
     REDIS_IDEMPOTENCY_PREFIX: str = "idempotency:"
     REDIS_RATE_LIMIT_PREFIX: str = "rate_limit:"

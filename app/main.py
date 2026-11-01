@@ -22,7 +22,7 @@ from app.database import (
 )
 from app.crud import users as users_crud
 from app.crud import inference as inference_crud
-from app.routers import health, auth
+from app.routers import health, auth, inference, admin
 
 # ─── Logging ─────────────────────────────────────────────────────────────────
 logging.basicConfig(
@@ -99,9 +99,11 @@ app.include_router(health.router)
 # Commit 3: Authentication
 app.include_router(auth.router)
 
-# Commits 4–8: Additional routers will be mounted here as they are implemented:
-# app.include_router(inference.router, prefix="/api/inference", tags=["Inference"])
+# Commit 5: Inference routing and Admin fault injection
+app.include_router(inference.router)
+app.include_router(admin.router)
+
+# Commits 7–8: Additional routers will be mounted here as they are implemented:
 # app.include_router(metrics.router,   prefix="/api/metrics",   tags=["Metrics"])
 # app.include_router(logs.router,      prefix="/api/logs",      tags=["Logs"])
-# app.include_router(admin.router,     prefix="/admin",         tags=["Admin"])
 
