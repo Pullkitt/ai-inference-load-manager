@@ -88,6 +88,21 @@ async def get_user_requests(
     return await cursor.to_list(length=limit)
 
 
+async def get_all_requests(
+    db: AsyncIOMotorDatabase,
+    limit: int = 50,
+) -> list[dict[str, Any]]:
+    """
+    Fetch the most recent `limit` inference requests across all users (admin view).
+    """
+    cursor = (
+        db.inference_requests.find({}, {"_id": 0})
+        .sort("submitted_at", -1)
+        .limit(limit)
+    )
+    return await cursor.to_list(length=limit)
+
+
 # =============================================================================
 # inference_results CRUD
 # =============================================================================
@@ -146,6 +161,21 @@ async def get_user_results(
         {"$project": {"_id": 0}},
     ]
     cursor = db.inference_requests.aggregate(pipeline)
+    return await cursor.to_list(length=limit)
+
+
+async def get_all_results(
+    db: AsyncIOMotorDatabase,
+    limit: int = 50,
+) -> list[dict[str, Any]]:
+    """
+    Fetch the most recent `limit` inference results across all requests (admin view).
+    """
+    cursor = (
+        db.inference_results.find({}, {"_id": 0})
+        .sort("completed_at", -1)
+        .limit(limit)
+    )
     return await cursor.to_list(length=limit)
 
 
